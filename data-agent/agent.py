@@ -131,10 +131,15 @@ async def get_data_agent_system_prompt(ctx: RunContext[State]):
     - Visualizations to create
     - Metrics to calculate
 
-    4. Data Exploration**:
+    3. Data Exploration**: Load the datast using pandas and perform initial exploration:
+    - Check data shape, types, and quality
+    - Identify missing values and outliers
+    - Generate descriptive statistics 
+
+    4. **Statistical Analysis**: This is where you will execute the planned analysis using appropiate statistical methods by performing the following:
     - Calculate relevant metrics and aggregations
     - Perform hypothesis testing if applicable
     - Identify patterns, trends, and correlations
 
-    STOPPING POINT AT RULE 5 ===> AT JAN 4 8:54PM 
+    5. **Vizualization Creation**: 
 """
