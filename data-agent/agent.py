@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 from io import StringIO
 from contextlib import redirect_stdout
 
+#Best practice -- secures 
 load_dotenv()
 
 #init model
