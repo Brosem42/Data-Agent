@@ -82,5 +82,7 @@ def python_execution_tool(
 class DataAgentOutput(BaseModel):
     analysis_report: str = Field(description="The analysis report of the data is in markdown format.")
     metrics: list[str] = Field(description="The metrics of the data.")
-    image_html_path: str = Field(description="The confirmed path of the graph. If there is no grpah, return empty string")
-    
+    image_html_path: str = Field(description="The confirmed path of the graph in html format. If there is no graph generated, return empty string.")
+    image_png_path: str = Field(description="The confirmed path of the graph in png format. If there is no graph generated, return empty string.")
+    conclusion: str = Field(description="The final analysis concludes here.")
+
