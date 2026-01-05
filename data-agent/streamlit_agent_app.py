@@ -104,6 +104,10 @@ def main():
                         st.error("X Analysis failed. Please contact admin or try again.")
                 except Exception as e:
                     st.error(f"Error found during analysis: {str(e)}")
+    st.markdown("###-------------------------------------###")
+    st.header(📊 "Analysis Results")
+
+    if st.session_sta
 
 
 
