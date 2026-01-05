@@ -34,7 +34,7 @@ if "uploaded_file_path" not in st.session_state:
 def save_uploaded_file(uploaded_file) -> str:
     """Save uploaded file to temporary directory and returned path"""
     try:
-        #creating my temp file
+        #writing the temp file as data saved in store with .getbuffer
         with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as tmp_file:
             tmp_file.write(uploaded_file.getbuffer())
             return tmp_file.name
@@ -45,9 +45,9 @@ def save_uploaded_file(uploaded_file) -> str:
 def main():
     st.title("📊 Data Agent")
     st.markdown("Upload your CSV data and get comprehensive analysis with data insights.")
-
+#when performing upload file path action--> output a shorthand summary of the data
     if st.session_state.uploaded_file_path:
-        st.markdown("### Data Summary")
+        st.markdown("### Summary")
         table_summary = pd.read_csv(st.session_state.uploaded_file_path)
         st.write(table_summary.head())
 
@@ -68,23 +68,23 @@ def main():
         if st.button("Clear history", type="secondary"):
             st.session_state.uploaded_file_path = None
             st.rerun()
-        
+    #user query input 
     st.subheader("💬 Query Analysis")
     user_query = st.text_area(
         "What kind of data would you like to access?",
-        placeholder="e.g., What are the key trends in the sales data? Show me correlations between different variables.",
+        placeholder="e.g., What are the key trends in the sales data? Show me correlations between different variables for our products.",
         height=120,
         help="Describe what analysis you want to perform on your data" 
     )
 
-    # user query analysis button
+    # user query analysis button with suggestions to make it user-friendly
     analyze_button = st.button(
         "Analyze data",
         type="primary",
         disabled=not (uploaded_file and user_query),
         help="Upload a file and enter a query to start analysis"
     )
-
+#analyze data + query button logic
     if analyze_button:
         if not st.sessions_state.uploaded_file_path:
             st.error("Please upload CSV file first")
@@ -92,3 +92,17 @@ def main():
             st.error("Please enter an analysis query")
         else:
             with st.spinner("Analyzing your data...This might take a few minutes."):
+                try:
+                    #asynchronous analysis from agent
+                    result = run_agent(user_query, st.session_state.uploaded_file_path)
+
+                    if result:
+                        st.session_state.current_query = result
+                        st.session_state.query_history.append(result)
+                        st.success("Analysis completed successfully.")
+                    else:
+                        st.error("X Analysis failed. Please contact admin or try again.")
+                except Exception as e:
+                    st.error(f"Error found during analysis: {str(e)}")
+
+                    
