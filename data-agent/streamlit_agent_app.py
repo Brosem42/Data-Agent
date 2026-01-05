@@ -50,3 +50,45 @@ def main():
         st.markdown("### Data Summary")
         table_summary = pd.read_csv(st.session_state.uploaded_file_path)
         st.write(table_summary.head())
+
+    with st.sidebar:
+        st.header("📋 Upload File")
+        uploaded_file = st.file_uploader(
+            "Choose a CSV file",
+            type="csv",
+            help="Upload your dataset in CSV format"
+        )
+
+        if uploaded_file is not None:
+            file_path = save_uploaded_file(uploaded_file)
+            if file_path:
+                st.session_state.update_file_path = file_path
+                st.success(f"✅ File Uploaded: {uploaded_file.name}")
+
+        if st.button("Clear history", type="secondary"):
+            st.session_state.uploaded_file_path = None
+            st.rerun()
+        
+    st.subheader("💬 Query Analysis")
+    user_query = st.text_area(
+        "What kind of data would you like to access?",
+        placeholder="e.g., What are the key trends in the sales data? Show me correlations between different variables.",
+        height=120,
+        help="Describe what analysis you want to perform on your data" 
+    )
+
+    # user query analysis button
+    analyze_button = st.button(
+        "Analyze data",
+        type="primary",
+        disabled=not (uploaded_file and user_query),
+        help="Upload a file and enter a query to start analysis"
+    )
+
+    if analyze_button:
+        if not st.sessions_state.uploaded_file_path:
+            st.error("Please upload CSV file first")
+        elif not user_query.strip():
+            st.error("Please enter an analysis query")
+        else:
+            with st.spinner("Analyzing your data...This might take a few minutes."):
