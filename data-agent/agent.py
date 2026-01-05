@@ -205,4 +205,13 @@ async def get_data_agent_system_prompt(ctx: RunContext[State]):
     Approach this analysis systematically. Think step-by-step, validate your work with data metrics, measure performance, and ensure insight is backed by quantitative evidence. 
     Your goal is to provide the user with a thorough, professional analysis that directly addresses their query.
     """
-    return prompt
+
+#invoking the data agent
+
+def run_agent(user_query: str, dataset_path=str):
+    #define state of input
+    state = State(user_query=user_query, file_name=dataset_path)
+    response  = data_agent.run_sync(deps=state)
+    print(response)
+    response_data = response.__dataclass_fields__
+    return response_data
