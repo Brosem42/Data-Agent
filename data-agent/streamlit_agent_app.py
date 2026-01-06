@@ -12,7 +12,6 @@ import plotly.express as px
 import requests 
 from io import StringIO
 
-st.code(os.popen('pip list').read())
 #for plotting
 import plotly.io as pio
 pio.templates["custom"] = pio.templates["seaborn"]
@@ -73,6 +72,10 @@ def main():
         st.markdown("### Summary")
         table_summary = pd.read_csv(st.session_state.uploaded_file_path)
         st.write(table_summary.head())
+
+        table_summary = load_data(st.session_state.uploaded_file_path)
+        if table_summary is not None:
+            st.write(table_summary.head())
 
     with st.sidebar:
         st.header("📋 Upload File or Upload URL")
