@@ -24,7 +24,7 @@ load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
 
 if not api_key:
-    raise ValueError("OPENAI_API_KEHY NOT FOUND IN ENVIRONMENT VAR")
+    raise ValueError("OPENAI_API_KEH NOT FOUND IN ENVIRONMENT VAR")
 
 
 model = OpenAIChatModel(
@@ -105,7 +105,7 @@ data_agent = Agent(
            Tool(python_execution_tool, takes_ctx=False)
            ],
            deps_type=State,
-           result_type=DataAgentOutput
+           result_tool_return_view=DataAgentOutput
 )
 
 #system prompting --> object 
