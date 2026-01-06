@@ -68,10 +68,18 @@ def load_data(path_or_url):
 @st.cache_data(ttl=600)  
 def fetch_from_documentdb():
     try:
-        # Use Streamlit Secrets for security
+        # 1. Update your Secret to the NLB endpoint or Proxy IP
         uri = st.secrets["MONGODB_URI"] 
-        # DocumentDB requires SSL and sometimes directConnection
-        client = MongoClient(uri, tls=True, tlsCAFile='global-bundle.pem', directConnection=True)
+        
+        # 2. Add 'tlsAllowInvalidHostnames' because the certificate 
+        # won't match the Proxy/NLB hostname
+        client = MongoClient(
+            uri, 
+            tls=True, 
+            tlsCAFile='global-bundle.pem',
+            tlsAllowInvalidHostnames=True,  # CRITICAL for external access
+            directConnection=True           # Required if connecting to a single node/proxy
+        )
         db = client.your_database_name
         collection = db.your_collection_name
         
