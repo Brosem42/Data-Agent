@@ -182,3 +182,25 @@ Report:
 
 Metrics:
 {chr(10).join(f"• {metric}" for metric in data_query.metrics) if data_query.metrics else "No metrics calculated."}
+
+Conclusion:
+{data_query.conclusion}
+"""
+            st.download_button(
+                label="Save Summary (TXT)",
+                data=summary_text,
+                file_name=f"analysis_summaryi_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt",
+                mime="text/plain"
+            )
+    else:
+        st.info("Upload a CSV file and enter your analysis query to get started.")
+# If I have a query already passed/stored--> show the previous query history if it's greater than 1
+    if st.session_state.query_history and len(st.session_state.query_history) > 1:
+        st.header("Query History")
+        for data_query in st.session_state.query_history[0:len(st.session_state.query_history)-1]:
+            with st.expander(f"Query: {data_query.analysis_report[:50]}..."):
+                st.markdown(data_query.analysis_report)
+                st.image(data_query.image_png_path)
+
+if __name__ == "__main__":
+    main()
