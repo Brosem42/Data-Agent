@@ -21,7 +21,16 @@ from contextlib import redirect_stdout
 load_dotenv()
 
 #init model
-model = OpenAIChatModel('gpt-5.2', provider=OpenAIProvider(api_key=os.getenv('OPENAI_API_KEY')))
+api_key = os.getenv("OPENAI_API_KEY")
+
+if not api_key:
+    raise ValueError("OPENAI_API_KEHY NOT FOUND IN ENVIRONMENT VAR")
+
+
+model = OpenAIChatModel(
+    'gpt-5.2', 
+    provider=OpenAIProvider(api_key=api_key)
+)
 
 #define state--> basically just defining what is happening between my agent and the user
 @dataclass 
@@ -93,10 +102,10 @@ data_agent = Agent(
     tools=[Tool(get_column_list, takes_ctx=False), 
            Tool(get_column_description, takes_ctx=False), 
            Tool(generate_graph, takes_ctx=False), 
-           Tool(python_execution_tool, takes_ctx=False)],
+           Tool(python_execution_tool, takes_ctx=False)
+           ],
            deps_type=State,
-           result_type=DataAgentOutput,
-           instrument=True
+           result_type=DataAgentOutput
 )
 
 #system prompting --> object 
