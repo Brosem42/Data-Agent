@@ -53,22 +53,31 @@ def main():
         st.write(table_summary.head())
 
     with st.sidebar:
-        st.header("📋 Upload File")
-        uploaded_file = st.file_uploader(
-            "Choose a CSV file",
-            type="csv",
-            help="Upload your dataset in CSV format"
-        )
+        st.header("📋 Upload File or Upload URL")
 
-        if uploaded_file is not None:
-            file_path = save_uploaded_file(uploaded_file)
-            if file_path:
-                st.session_state.uploaded_file_path = file_path
-                st.success(f"✅ File Uploaded: {uploaded_file.name}")
+        input_system = st.radio("Select upload method:", ["Upload CSV", "Submit URL (JSON)"])
+
+        if input_system == "Upload CSV":
+            uploaded_file = st.file_uploader(
+                "Choose a CSV file",
+                type=["csv"],
+                help="Upload your dataset in CSV format"
+            )
+            if uploaded_file is not None:
+                st.session_state.uploaded_file_path = save_uploaded_file(uploaded_file)
+                st.success(f"✅ Loaded: {uploaded_file.name}")
+        else:
+            json_url = st.text_input("Paste your URL:", placeholder="https://api.example.com/data.json")
+            if json_url:
+                st.session_state.uploaded_file_path = json_url
+                st.info("URL added for analysis.")
 
         if st.button("Clear history", type="secondary"):
             st.session_state.uploaded_file_path = None
+            st.session_state.current_query = None
+            st.session_state.query_history = []
             st.rerun()
+
     #user query input 
     st.subheader("💬 Query Analysis")
     user_query = st.text_area(
@@ -78,11 +87,13 @@ def main():
         help="Describe what analysis you want to perform on your data" 
     )
 
+    is_ready = st.session_state.get("uploaded_file_path") is not None and user_query.strip() != ""
+
     # user query analysis button with suggestions to make it user-friendly
     analyze_button = st.button(
         "Analyze data",
         type="primary",
-        disabled=not (uploaded_file and user_query),
+        disabled=not is_ready,
         help="Upload a file and enter a query to start analysis"
     )
 #analyze data + query button logic

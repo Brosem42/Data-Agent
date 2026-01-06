@@ -42,8 +42,11 @@ class State:
 
 #Tool 1: defining tool for reading csv files
 def get_column_list(
-        file_name: Annotated[str, "The file that has the data"]):
-    df = pd.read_csv(file_name)
+        file_name: Annotated[str, "The file or URL that has the data"]):
+    if file_name.endswith('.json'):
+        df = pd.read_json(file_name)
+    else:
+        df = pd.read_csv(file_name)
     columns = df.columns.tolist()
     return str(columns)
 
