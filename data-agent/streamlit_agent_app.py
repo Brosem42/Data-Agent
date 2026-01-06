@@ -62,7 +62,7 @@ def main():
         if uploaded_file is not None:
             file_path = save_uploaded_file(uploaded_file)
             if file_path:
-                st.session_state.update_file_path = file_path
+                st.session_state.uploaded_file_path = file_path
                 st.success(f"✅ File Uploaded: {uploaded_file.name}")
 
         if st.button("Clear history", type="secondary"):
@@ -86,7 +86,7 @@ def main():
     )
 #analyze data + query button logic
     if analyze_button:
-        if not st.sessions_state.uploaded_file_path:
+        if not st.session_state.uploaded_file_path:
             st.error("Please upload CSV file first")
         elif not user_query.strip():
             st.error("Please enter an analysis query")
