@@ -105,7 +105,7 @@ data_agent = Agent(
            Tool(python_execution_tool, takes_ctx=False)
            ],
            deps_type=State,
-           result_type=DataAgentOutput
+           output_type=DataAgentOutput
 )
 
 #system prompting --> object 
@@ -173,7 +173,7 @@ async def get_data_agent_system_prompt(ctx: RunContext[State]):
 
     *generate_graph tool**:
     - Always include necessary imports and dataset loading 
-    - Create publication-quality visualizations with proper labels, titles, and legends
+    - Create publcation-quality visualizations with proper labels, titles, and legends
     - Save graphs using: `plt.savefig('graph.png', dpi=300, bbox_inches='tight') and HTML equivalent
     - Print file paths in the required format: `print("The graph path in html format is <path.html> and the graph path in png format is <path.png>")`
 
