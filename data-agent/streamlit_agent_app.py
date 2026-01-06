@@ -9,6 +9,8 @@ from agent import run_agent
 import base64
 from typing import Optional
 import plotly.express as px
+import requests 
+from io import StringIO
 
 st.code(os.popen('pip list').read())
 #for plotting
@@ -42,6 +44,26 @@ def save_uploaded_file(uploaded_file) -> str:
     except Exception as e:
         st.error(f"Error saving file: {str(e)}")
         return None
+
+#function to help load csv or json from local path or remote URL file
+def load_data(path_or_url):
+    if path_or_url.startswith(('http://', 'https://')):
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' 
+        }
+        try:
+            response = requests.get(path_or_url, headers=headers)
+            response.raise_for_status()
+
+            if path_or_url.endswith('json') or 'application/json' in response.headers.get('Content-Type', ''):
+                return pd.read_json(StringIO(response.text))
+            return pd.read_csv(StringIO(response.text))
+        
+        except Exception as e:
+            st.error(f"Failed to fetch data from URL: {str(e)}")
+            return None
+    else:
+        return pd.read_csv(path_or_url)  
 
 def main():
     st.title("📊 Data Agent")
