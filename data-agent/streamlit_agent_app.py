@@ -105,10 +105,80 @@ def main():
                 except Exception as e:
                     st.error(f"Error found during analysis: {str(e)}")
     st.markdown("###-------------------------------------###")
-    st.header(📊 "Analysis Results")
+    st.header("📊 Analysis Results")
 
-    if st.session_sta
+    if st.session_state.current_query:
+        data_query = st.session_state.current_query
 
+        # tabs for different sections of agentic reasoning 
+        tab1, tab2, tab3, tab4 = st.tabs(["Report", "Metrics", "Visualizations", "Conclusion"])
 
+        #analysis report tab
+        with tab1:
+            st.subheader("Analysis report")
+            if data_query.analysis_report:
+                st.markdown(data_query.analysis_report)
+            else:
+                st.warning("No analysis report available.")
+        
+        #metrics tab
+        with tab2:
+            st.subheader("Key Metrics")
+            if data_query.metrics:
+                for i, metric in enumerate(data_query.metrics, 1):
+                    st.write(f"{i}. {metric}")
+            else: 
+                st.warning("No metrics calculated.")
 
+        #visualizations tab
+        with tab3:
+            st.subheader("Visualizations")
 
+            #primary goes to html-->secondary goes png
+            if data_query.image_html_path:
+                try:
+                    with open(data_query.image_html_path, "r", encoding='utf-8') as f:
+                        html_content = f.read()
+                        st.components.v1.html(html_content, height=500, scrolling=True)
+                except Exception as e:
+                    st.error(f"Error loading HTML file: {str(e)}")
+
+            elif data_query.image_png_path:
+                st.image(data_query.image_png_path)
+            else:
+                st.warning("No visualizations available.")
+        
+        #Conclusion + recommendations tab
+        with tab4:
+            st.subheader("Conclusion + Recommendations")
+            if data_query.conclusion:
+                st.markdown(data_query.conclusion)
+            else:
+                st.warning("No recommendations or feedback generated")
+
+        #how to save the file---multi-method
+        st.subheader("Save the results")
+        col_save1, col_save2 = st.columns(2)
+
+        with col_save1:
+            if data_query.analysis_report:
+                st.download_button(
+                    label="Save report (as MD)",
+                    data=data_query.analysis_report,
+                    file_name=f"analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                    mime="text/markdown"
+                )
+        #create summary text for download
+        with col_save2:
+            summary_text = f"""
+Analysis Summary
+================
+Query: {user_query}
+File: {st.session_state.uploaded_file_path}
+Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+Report:
+{data_query.analysis_report}
+
+Metrics:
+{chr(10).join(f"• {metric}" for metric in data_query.metrics) if data_query.metrics else "No metrics calculated."}
