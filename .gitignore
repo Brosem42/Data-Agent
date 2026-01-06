@@ -1,6 +1,10 @@
 
 # sensitive info
+./data-agent/env
+# sensitive info
 .env
+data-agent/.env
+.env.*
 
 #python store artifacts
 __pycache__/
