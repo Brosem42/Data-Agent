@@ -28,7 +28,7 @@ if not api_key:
 
 
 model = OpenAIChatModel(
-    'gpt-5.2', 
+    'gpt-4o', 
     provider=OpenAIProvider(api_key=api_key)
 )
 
@@ -105,7 +105,7 @@ data_agent = Agent(
            Tool(python_execution_tool, takes_ctx=False)
            ],
            deps_type=State,
-           result_tool_return_view=DataAgentOutput
+           result_type=DataAgentOutput
 )
 
 #system prompting --> object 
@@ -218,10 +218,9 @@ async def get_data_agent_system_prompt(ctx: RunContext[State]):
 
 #invoking the data agent
 
-def run_agent(user_query: str, dataset_path=str):
+def run_agent(user_query: str, dataset_path: str):
     #define state of input
     state = State(user_query=user_query, file_name=dataset_path)
-    response  = data_agent.run_sync(deps=state)
+    response  = data_agent.run_sync(user_query, deps=state)
     print(response)
-    response_data = response.__dataclass_fields__
-    return response_data
+    return response.data
