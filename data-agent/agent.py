@@ -221,6 +221,5 @@ async def get_data_agent_system_prompt(ctx: RunContext[State]):
 def run_agent(user_query: str, dataset_path: str):
     #define state of input
     state = State(user_query=user_query, file_name=dataset_path)
-    response  = data_agent.run_sync(user_query, deps=state)
-    print(response)
-    return response.data
+    result = data_agent.run_sync(user_query, deps=state)
+    return result.output
