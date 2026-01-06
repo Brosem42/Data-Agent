@@ -11,6 +11,7 @@ from typing import Optional
 import plotly.express as px
 import requests 
 from io import StringIO
+from pymongo import MongoClient
 
 #for plotting
 import plotly.io as pio
@@ -48,19 +49,39 @@ def save_uploaded_file(uploaded_file) -> str:
 def load_data(path_or_url):
     """Safely loads data using requests to avoid HTTP 403/401 errors"""
     if not path_or_url: return None
-    if path_or_url.startswith(('http://', 'https://')):
-        headers = {'User-Agent': 'Mozilla/5.0'}
+    if str(path_or_url).startswith(('http://', 'https://')):
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         try:
-            response = requests.get(path_or_url, headers=headers)
+            response = requests.get(path_or_url, headers=headers, timeout=10)
             response.raise_for_status()
-            if path_or_url.endswith('.json'):
+
+            # Handle JSON vs CSV
+            if path_or_url.endswith('.json') or 'application/json' in response.headers.get('Content-Type', ''):
                 return pd.read_json(StringIO(response.text))
             return pd.read_csv(StringIO(response.text))
         except Exception as e:
-            st.error(f"URL Error: {str(e)}")
+            st.error(f"🌐 URL Access Error: {str(e)}")
             return None
     else:
-        return pd.read_csv(path_or_url) 
+        return pd.read_csv(path_or_url)
+    
+@st.cache_data(ttl=600)  
+def fetch_from_documentdb():
+    try:
+        # Use Streamlit Secrets for security
+        uri = st.secrets["MONGODB_URI"] 
+        # DocumentDB requires SSL and sometimes directConnection
+        client = MongoClient(uri, tls=True, tlsCAFile='global-bundle.pem', directConnection=True)
+        db = client.your_database_name
+        collection = db.your_collection_name
+        
+        # Fetch data and convert to DataFrame
+        data = list(collection.find().limit(1000))
+        return pd.DataFrame(data)
+    except Exception as e:
+        st.error(f"Failed to fetch from AWS DocumentDB: {e}")
+        return None
+    
 
 def main():
     st.title("📊 Data Agent")
@@ -105,19 +126,22 @@ def main():
 
 #analyze data + query button logic
     if analyze_button:
-        with st.spinner("Agent is thinking... This might take a few minutes."):
-            try:
-                # asynchronous analysis from agent
-                result = run_agent(user_query, st.session_state.uploaded_file_path)
-
-                if result:
-                    st.session_state.current_query = result
-                    st.session_state.query_history.append(result)
-                    st.success("Analysis completed successfully.")
-                else:
-                    st.error("Analysis failed. Please try a different query.")
-            except Exception as e:
-                st.error(f"Analysis Error: {str(e)}")
+        # Check if we should use DB because of Quota Exceeded
+        with st.spinner("Fetching data from AWS DocumentDB..."):
+            df = fetch_from_documentdb()
+            
+            if df is not None:
+                st.session_state.uploaded_file_path = "AWS_DocumentDB_Active"
+                st.success("✅ Data fetched from AWS!")
+                
+                # Plot directly since AI quota is exceeded
+                st.subheader("📊 Trends from AWS Data")
+                # Auto-detect numeric columns for plotting
+                num_cols = df.select_dtypes(include=['number']).columns.tolist()
+                if num_cols:
+                    fig = px.line(df, y=num_cols[0], title=f"Trend for {num_cols[0]}")
+                    st.plotly_chart(fig)
+                st.dataframe(df.head())
                 
     st.divider()
     st.header("📊 Analysis Results")
