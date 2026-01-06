@@ -16,16 +16,19 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from io import StringIO
 from contextlib import redirect_stdout
+import matplotlib
+import requests
 
 #Best practice -- secures 
 load_dotenv()
 
+#use headless cloud env
+matplotlib.use('Agg')
+
 #init model
 api_key = os.getenv("OPENAI_API_KEY")
-
 if not api_key:
     raise ValueError("OPENAI_API_KEH NOT FOUND IN ENVIRONMENT VAR")
-
 
 model = OpenAIChatModel(
     'gpt-4o', 
@@ -41,86 +44,92 @@ class State:
 #defining the tools my agent will use to perform specific actions within data analysis
 
 #Tool 1: defining tool for reading csv files
-def get_column_list(
-        file_name: Annotated[str, "The file or URL that has the data"]):
-    if file_name.endswith('.json'):
-        df = pd.read_json(file_name)
+def get_column_list(file_name: Annotated[str, "The file path or URL that has the data"]):
+    if file_name.startswith(('http://', 'https://')):
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        resp = requests.get(file_name, headers=headers)
+        if file_name.endswith('.json'):
+            df = pd.read_json(StringIO(resp.text))
+        else:
+            df = pd.read_csv(StringIO(resp.text))
     else:
-        df = pd.read_csv(file_name)
-    columns = df.columns.tolist()
-    return str(columns)
+        if file_name.endswith('.json'):
+            df = pd.read_json(file_name)
+        else:
+            df = pd.read_csv(file_name)
+    return str(df.columns.tolist())
+
 
 ##Tool 2: defining tool to get the description of columns
-def get_column_description(
-        column_dict: Annotated[dict, "Dictionary of columns + description of column"]):
-    
+def get_column_description(column_dict: Annotated[dict, "Dictionary of columns + description"]):
     return str(column_dict)
 
+
 #Tool 3: defining tool for generating my graph of data collected
-def generate_graph(
-        code: Annotated[str, "Code to generate the visualizations"]) -> str:
+def generate_graph(code: Annotated[str, "Code to generate visualizations"]) -> str:
     catcher = StringIO()
-    
     try:
         with redirect_stdout(catcher):
             compiled_code = compile(code, '<string>', 'exec')
             exec(compiled_code, globals(), globals())
-            return(
-                f"Graph path is in \n\n{catcher.getvalue()}\n"
-                f"Once successful, you may proceed to the next step."
-            )
+            return f"Graph successful. Output: {catcher.getvalue()}"
     except Exception as e:
-        return f"Failed to run code. Error: {repr(e)}, try different pathway approach"
+        return f"Failed to run code. Error: {repr(e)}"
     
 #Tool 4: tool that executes the python code for metrics of each variable item, object
-def python_execution_tool(
-        code: Annotated[str, "Python code generated for data calculation and processing."]) -> str:
+def python_execution_tool(code: Annotated[str, "Python code for calculation"]) -> str:
     catcher = StringIO()
-
     try:
         with redirect_stdout(catcher):
-            #observe for syntax errors early on
             compiled_code = compile(code, '<string>', 'exec')
-            exec(compiled_code, globals, globals())
-
-            return (
-                f"The metric value is at \n\n{catcher.getvalue}\n"
-                f"Once successful, you may proceed to the next step and include this value in the report."
-            )
+            exec(compiled_code, globals(), globals())
+            return f"Metric result: {catcher.getvalue()}"
     except Exception as e:
-        return f"Failed to run code. Error: {repr(e)}, try different pathway approach"
-    
+        return f"Failed to run code. Error: {repr(e)}"
 
 # Create and invoke analyst agent + connect my tools
 class DataAgentOutput(BaseModel):
-    analysis_report: str = Field(description="The analysis report of the data is in markdown format.")
-    metrics: list[str] = Field(description="The metrics of the data.")
-    image_html_path: str = Field(description="The confirmed path of the graph in html format. If there is no graph generated, return empty string.")
-    image_png_path: str = Field(description="The confirmed path of the graph in png format. If there is no graph generated, return empty string.")
-    conclusion: str = Field(description="The final analysis concludes here.")
+    analysis_report: str = Field(description="Markdown report.")
+    metrics: list[str] = Field(description="Data metrics.")
+    image_html_path: str = Field(description="HTML graph path.")
+    image_png_path: str = Field(description="PNG graph path.")
+    conclusion: str = Field(description="Final analysis.")
+
+data_agent = Agent(
+    model=model,
+    tools=[
+        Tool(get_column_list, takes_ctx=False), 
+        Tool(get_column_description, takes_ctx=False), 
+        Tool(generate_graph, takes_ctx=False), 
+        Tool(python_execution_tool, takes_ctx=False)
+    ],
+    deps_type=State,
+    output_type=DataAgentOutput
+)
 
 #invoking custom made tools
 data_agent = Agent(
     model=model,
-    tools=[Tool(get_column_list, takes_ctx=False), 
-           Tool(get_column_description, takes_ctx=False), 
-           Tool(generate_graph, takes_ctx=False), 
-           Tool(python_execution_tool, takes_ctx=False)
-           ],
-           deps_type=State,
-           output_type=DataAgentOutput
+    tools=[
+        Tool(get_column_list, takes_ctx=False), 
+        Tool(get_column_description, takes_ctx=False), 
+        Tool(generate_graph, takes_ctx=False), 
+        Tool(python_execution_tool, takes_ctx=False)
+    ],
+    deps_type=State,
+    output_type=DataAgentOutput
 )
 
 #system prompting --> object 
 @data_agent.system_prompt
 async def get_data_agent_system_prompt(ctx: RunContext[State]):
-    prompt = f"""
+    return f"""
     You are an expert data analyst agent who has successfully mastered the task to analyze the data provided by the user. 
     You are responsible for executing comprehensive, but user-friendly data analysis workflows and generating professional analytic reports for both technical and non-technical stakeholders, 
     users with or without AI knowledge or machine learning experience, and lastly for technical data engineers and machine learning engineers who work in the field.
 
     **Your Task:"**
-    Analyze the provided dataset to answer the user's query through systematic data exploration, statistical analysis, and visualization.
+    Analyze {ctx.deps.file_name}, the provided dataset to answer {ctx.deps.user_query} the user's query through systematic data exploration, statistical analysis, and visualization.
     Deliver actionable insights through a comprehensive report backed by quantitative evidence.
 
     **Tools Available to you for use:"
@@ -222,7 +231,7 @@ async def get_data_agent_system_prompt(ctx: RunContext[State]):
 #invoking the data agent
 
 def run_agent(user_query: str, dataset_path: str):
-    #define state of input
     state = State(user_query=user_query, file_name=dataset_path)
+    #define state of input
     result = data_agent.run_sync(user_query, deps=state)
     return result.output

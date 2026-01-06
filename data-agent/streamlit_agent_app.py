@@ -46,23 +46,21 @@ def save_uploaded_file(uploaded_file) -> str:
 
 #function to help load csv or json from local path or remote URL file
 def load_data(path_or_url):
+    """Safely loads data using requests to avoid HTTP 403/401 errors"""
+    if not path_or_url: return None
     if path_or_url.startswith(('http://', 'https://')):
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' 
-        }
+        headers = {'User-Agent': 'Mozilla/5.0'}
         try:
             response = requests.get(path_or_url, headers=headers)
             response.raise_for_status()
-
-            if path_or_url.endswith('json') or 'application/json' in response.headers.get('Content-Type', ''):
+            if path_or_url.endswith('.json'):
                 return pd.read_json(StringIO(response.text))
             return pd.read_csv(StringIO(response.text))
-        
         except Exception as e:
-            st.error(f"Failed to fetch data from URL: {str(e)}")
+            st.error(f"URL Error: {str(e)}")
             return None
     else:
-        return pd.read_csv(path_or_url)  
+        return pd.read_csv(path_or_url) 
 
 def main():
     st.title("📊 Data Agent")
@@ -70,95 +68,76 @@ def main():
 #when performing upload file path action--> output a shorthand summary of the data
     if st.session_state.uploaded_file_path:
         st.markdown("### Summary")
-        table_summary = pd.read_csv(st.session_state.uploaded_file_path)
-        st.write(table_summary.head())
-
-        table_summary = load_data(st.session_state.uploaded_file_path)
-        if table_summary is not None:
-            st.write(table_summary.head())
+        df = load_data(st.session_state.uploaded_file_path)
+        if df is not None:
+            st.write(df.head())
 
     with st.sidebar:
-        st.header("📋 Upload File or Upload URL")
-
-        input_system = st.radio("Select upload method:", ["Upload CSV", "Submit URL (JSON)"])
-
-        if input_system == "Upload CSV":
-            uploaded_file = st.file_uploader(
-                "Choose a CSV file",
-                type=["csv"],
-                help="Upload your dataset in CSV format"
-            )
-            if uploaded_file is not None:
+        st.header("📋 Input Data")
+        method = st.radio("Method:", ["Upload CSV", "Submit URL"])
+        
+        if method == "Upload CSV":
+            uploaded_file = st.file_uploader("CSV File", type="csv")
+            if uploaded_file:
                 st.session_state.uploaded_file_path = save_uploaded_file(uploaded_file)
-                st.success(f"✅ Loaded: {uploaded_file.name}")
         else:
-            json_url = st.text_input("Paste your URL:", placeholder="https://api.example.com/data.json")
-            if json_url:
-                st.session_state.uploaded_file_path = json_url
-                st.info("URL added for analysis.")
+            url = st.text_input("Data URL (CSV/JSON)")
+            if url: st.session_state.uploaded_file_path = url
 
-        if st.button("Clear history", type="secondary"):
-            st.session_state.uploaded_file_path = None
-            st.session_state.current_query = None
-            st.session_state.query_history = []
+        if st.button("Clear All"):
+            st.session_state.clear()
             st.rerun()
 
     #user query input 
     st.subheader("💬 Query Analysis")
     user_query = st.text_area(
         "What kind of data would you like to access?",
-        placeholder="e.g., What are the key trends in the sales data? Show me correlations between different variables for our products.",
-        height=120,
-        help="Describe what analysis you want to perform on your data" 
+        placeholder="e.g., What are the key trends? Show me correlations between different variables for our products.",
+        height=120
     )
 
-    is_ready = st.session_state.get("uploaded_file_path") is not None and user_query.strip() != ""
-
-    # user query analysis button with suggestions to make it user-friendly
+    is_ready = st.session_state.uploaded_file_path is not None and user_query.strip() != ""
     analyze_button = st.button(
-        "Analyze data",
-        type="primary",
-        disabled=not is_ready,
-        help="Upload a file and enter a query to start analysis"
+        "Analyze Data", 
+        type="primary", 
+        disabled=not is_ready
     )
+
 #analyze data + query button logic
     if analyze_button:
-        if not st.session_state.uploaded_file_path:
-            st.error("Please upload CSV file first")
-        elif not user_query.strip():
-            st.error("Please enter an analysis query")
-        else:
-            with st.spinner("Analyzing your data...This might take a few minutes."):
-                try:
-                    #asynchronous analysis from agent
-                    result = run_agent(user_query, st.session_state.uploaded_file_path)
+        with st.spinner("Agent is thinking... This might take a few minutes."):
+            try:
+                # asynchronous analysis from agent
+                result = run_agent(user_query, st.session_state.uploaded_file_path)
 
-                    if result:
-                        st.session_state.current_query = result
-                        st.session_state.query_history.append(result)
-                        st.success("Analysis completed successfully.")
-                    else:
-                        st.error("X Analysis failed. Please contact admin or try again.")
-                except Exception as e:
-                    st.error(f"Error found during analysis: {str(e)}")
-    st.markdown("###-------------------------------------###")
+                if result:
+                    st.session_state.current_query = result
+                    st.session_state.query_history.append(result)
+                    st.success("Analysis completed successfully.")
+                else:
+                    st.error("Analysis failed. Please try a different query.")
+            except Exception as e:
+                st.error(f"Analysis Error: {str(e)}")
+                
+    st.divider()
     st.header("📊 Analysis Results")
 
+    # --- Results Display Logic ---
     if st.session_state.current_query:
         data_query = st.session_state.current_query
 
-        # tabs for different sections of agentic reasoning 
+        # Tabs for different sections
         tab1, tab2, tab3, tab4 = st.tabs(["Report", "Metrics", "Visualizations", "Conclusion"])
 
-        #analysis report tab
+        # analysis report tab
         with tab1:
-            st.subheader("Analysis report")
+            st.subheader("Analysis Report")
             if data_query.analysis_report:
                 st.markdown(data_query.analysis_report)
             else:
                 st.warning("No analysis report available.")
         
-        #metrics tab
+        # metrics tab
         with tab2:
             st.subheader("Key Metrics")
             if data_query.metrics:
@@ -167,11 +146,9 @@ def main():
             else: 
                 st.warning("No metrics calculated.")
 
-        #visualizations tab
+        # visualizations tab
         with tab3:
             st.subheader("Visualizations")
-
-            #primary goes to html-->secondary goes png
             if data_query.image_html_path:
                 try:
                     with open(data_query.image_html_path, "r", encoding='utf-8') as f:
@@ -179,65 +156,54 @@ def main():
                         st.components.v1.html(html_content, height=500, scrolling=True)
                 except Exception as e:
                     st.error(f"Error loading HTML file: {str(e)}")
-
             elif data_query.image_png_path:
                 st.image(data_query.image_png_path)
             else:
                 st.warning("No visualizations available.")
         
-        #Conclusion + recommendations tab
+        # Conclusion tab
         with tab4:
             st.subheader("Conclusion + Recommendations")
             if data_query.conclusion:
                 st.markdown(data_query.conclusion)
             else:
-                st.warning("No recommendations or feedback generated")
+                st.warning("No recommendations generated.")
 
-        #how to save the file---multi-method
-        st.subheader("Save the results")
+        # --- Save results section ---
+        st.subheader("💾 Save Results")
         col_save1, col_save2 = st.columns(2)
 
         with col_save1:
             if data_query.analysis_report:
                 st.download_button(
-                    label="Save report (as MD)",
+                    label="Save report (MD)",
                     data=data_query.analysis_report,
                     file_name=f"analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
                     mime="text/markdown"
                 )
-        #create summary text for download
+
         with col_save2:
-            summary_text = f"""
-Analysis Summary
-================
-Query: {user_query}
-File: {st.session_state.uploaded_file_path}
-Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-Report:
-{data_query.analysis_report}
-
-Metrics:
-{chr(10).join(f"• {metric}" for metric in data_query.metrics) if data_query.metrics else "No metrics calculated."}
-
-Conclusion:
-{data_query.conclusion}
-"""
+            summary_text = f"Query: {user_query}\n\nReport:\n{data_query.analysis_report}\n\nConclusion:\n{data_query.conclusion}"
             st.download_button(
                 label="Save Summary (TXT)",
                 data=summary_text,
-                file_name=f"analysis_summaryi_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt",
+                file_name=f"summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
                 mime="text/plain"
             )
     else:
-        st.info("Upload a CSV file and enter your analysis query to get started.")
-# If I have a query already passed/stored--> show the previous query history if it's greater than 1
-    if st.session_state.query_history and len(st.session_state.query_history) > 1:
-        st.header("Query History")
-        for data_query in st.session_state.query_history[0:len(st.session_state.query_history)-1]:
-            with st.expander(f"Query: {data_query.analysis_report[:50]}..."):
-                st.markdown(data_query.analysis_report)
-                st.image(data_query.image_png_path)
+        st.info("Upload a CSV file/URL and enter your query to get started.")
 
+    # --- Query History ---
+    if st.session_state.query_history and len(st.session_state.query_history) > 1:
+        st.divider()
+        st.header("🕒 Query History")
+        # Loop through history (excluding current)
+        for i, hist in enumerate(reversed(st.session_state.query_history[:-1])):
+            with st.expander(f"Previous Analysis {len(st.session_state.query_history) - 1 - i}"):
+                st.markdown(hist.analysis_report)
+                if hist.image_png_path:
+                    st.image(hist.image_png_path)
+
+# --- Execution Entry Point ---
 if __name__ == "__main__":
     main()
