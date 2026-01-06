@@ -21,7 +21,8 @@ from contextlib import redirect_stdout
 load_dotenv()
 
 #init model
-model = OpenAIChatModel('gpt-4.1', provider=OpenAIProvider(api_key=os.getenv('OPENAI_API_KEY')))
+model = OpenAIChatModel('gpt-4.1')
+api_key=os.getenv('OPENAI_API_KEY')
 
 #define state--> basically just defining what is happening between my agent and the user
 @dataclass 
