@@ -6,7 +6,7 @@ from typing import List
 from pydantic_ai import Agent, RunContext, Tool
 from pydantic_ai.models.openai import OpenAIChatModel 
 from pydantic_ai.providers.openai import OpenAIProvider
-from pydantic_ai.providers.openai import OpenAIChatCompletion
+
 from typing import Annotated
 import asyncio
 from datetime import datetime 
