@@ -1,0 +1,16 @@
+
+# sensitive info
+.env
+
+#python store artifacts
+__pycache__/
+*.py[cod]
+*$.py.class
+venv/
+.venv/
+
+#local data submit 
+*.csv
+*.png
+*.html
+.temp/
