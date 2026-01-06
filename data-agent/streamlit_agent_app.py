@@ -10,6 +10,7 @@ import base64
 from typing import Optional
 import plotly.express as px
 
+st.code(os.popen('pip list').read())
 #for plotting
 import plotly.io as pio
 pio.templates["custom"] = pio.templates["seaborn"]
