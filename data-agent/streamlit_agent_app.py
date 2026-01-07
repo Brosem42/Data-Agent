@@ -1,241 +1,125 @@
 import streamlit as st
 import pandas as pd
+import requests
 import os
 import tempfile
-from datetime import datetime
-from pathlib import Path
-import asyncio
-from agent import run_agent
-import base64
-from typing import Optional
-import plotly.express as px
-import requests 
 from io import StringIO
+from datetime import datetime
 from pymongo import MongoClient
-
-#for plotting
+import plotly.express as px
 import plotly.io as pio
-pio.templates["custom"] = pio.templates["seaborn"]
-pio.templates.default = "custom"
-pio.templates["custom"].layout.autosize = True
+from agent import run_agent
 
-#setting page config
-st.set_page_config(
-    page_title="Data Agent",
-    page_icon="📊",
-    layout="wide"
-)
+# UI Config
+st.set_page_config(page_title="Data Agent", page_icon="📊", layout="wide")
 
-#setting up session states
+# Session States
+if "uploaded_file_path" not in st.session_state:
+    st.session_state.uploaded_file_path = None
 if "current_query" not in st.session_state:
     st.session_state.current_query = None
 if "query_history" not in st.session_state:
     st.session_state.query_history = []
-if "uploaded_file_path" not in st.session_state:
-    st.session_state.uploaded_file_path = None
 
-def save_uploaded_file(uploaded_file) -> str:
-    """Save uploaded file to temporary directory and returned path"""
-    try:
-        #writing the temp file as data saved in store with .getbuffer
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as tmp_file:
-            tmp_file.write(uploaded_file.getbuffer())
-            return tmp_file.name
-    except Exception as e:
-        st.error(f"Error saving file: {str(e)}")
-        return None
+def save_uploaded_file(uploaded_file):
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as tmp:
+        tmp.write(uploaded_file.getbuffer())
+        return tmp.name
 
-#function to help load csv or json from local path or remote URL file
 def load_data(path_or_url):
-    """Safely loads data using requests to avoid HTTP 403/401 errors"""
+    """Bypasses 403 Forbidden using Browser Headers"""
     if not path_or_url: return None
     if str(path_or_url).startswith(('http://', 'https://')):
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        # BROWSER HEADERS: Essential for static.krevera.com in 2026
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+        }
         try:
-            response = requests.get(path_or_url, headers=headers, timeout=10)
-            response.raise_for_status()
-
-            # Handle JSON vs CSV
-            if path_or_url.endswith('.json') or 'application/json' in response.headers.get('Content-Type', ''):
-                return pd.read_json(StringIO(response.text))
-            return pd.read_csv(StringIO(response.text))
+            resp = requests.get(path_or_url, headers=headers, timeout=15)
+            resp.raise_for_status()
+            if path_or_url.endswith('.json'):
+                return pd.read_json(StringIO(resp.text))
+            return pd.read_csv(StringIO(resp.text))
         except Exception as e:
-            st.error(f"🌐 URL Access Error: {str(e)}")
+            st.error(f"🌐 URL Access Error: {e}")
             return None
-    else:
-        return pd.read_csv(path_or_url)
-    
-@st.cache_data(ttl=600)  
+    return pd.read_csv(path_or_url)
+
 def fetch_from_documentdb():
+    """Connects to AWS DocumentDB via public proxy settings"""
     try:
-        # 1. Update your Secret to the NLB endpoint or Proxy IP
-        uri = st.secrets["MONGODB_URI"] 
-        
-        # 2. Add 'tlsAllowInvalidHostnames' because the certificate 
-        # won't match the Proxy/NLB hostname
+        # MONGODB_URI must use your Proxy or NLB endpoint, NOT the private cluster endpoint
         client = MongoClient(
             st.secrets["MONGODB_URI"],
-            tls=True, 
+            tls=True,
             tlsCAFile='global-bundle.pem',
-            tlsAllowInvalidHostnames=True, 
-            directConnection=True           
+            tlsAllowInvalidHostnames=True, # Critical for external access
+            directConnection=True,
+            serverSelectionTimeoutMS=5000
         )
-        db = client.your_database_name
-        collection = db.your_collection_name
-        
-        # Fetch data and convert to DataFrame
-        data = list(collection.find().limit(1000))
+        db = client.get_database("your_db")
+        collection = db.get_collection("your_collection")
+        data = list(collection.find().limit(500))
         return pd.DataFrame(data)
     except Exception as e:
-        st.error(f"Failed to fetch from AWS DocumentDB: {e}")
+        st.error(f"❌ AWS DocumentDB Timeout: {e}")
         return None
-    
 
 def main():
     st.title("📊 Data Agent")
-    st.markdown("Upload your CSV data and get comprehensive analysis with data insights.")
-#when performing upload file path action--> output a shorthand summary of the data
+    
+    # TOP DISPLAY: Summary
     if st.session_state.uploaded_file_path:
-        st.markdown("### Summary")
+        st.markdown("### 📋 Data Summary")
         df = load_data(st.session_state.uploaded_file_path)
         if df is not None:
-            st.write(df.head())
+            st.dataframe(df.head()) # Displays at the top as requested
+        else:
+            st.warning("⚠️ Data summary unavailable due to access errors.")
 
+    # Sidebar
     with st.sidebar:
         st.header("📋 Input Data")
-        method = st.radio("Method:", ["Upload CSV", "Submit URL"])
-        
+        method = st.radio("Method:", ["Upload CSV", "URL", "AWS DB"])
         if method == "Upload CSV":
-            uploaded_file = st.file_uploader("CSV File", type="csv")
-            if uploaded_file:
-                st.session_state.uploaded_file_path = save_uploaded_file(uploaded_file)
-        else:
-            url = st.text_input("Data URL (CSV/JSON)")
+            file = st.file_uploader("Choose CSV", type="csv")
+            if file: st.session_state.uploaded_file_path = save_uploaded_file(file)
+        elif method == "URL":
+            url = st.text_input("Dataset URL")
             if url: st.session_state.uploaded_file_path = url
+        else:
+            if st.button("Connect to AWS DocumentDB"):
+                df = fetch_from_documentdb()
+                if df is not None:
+                    # Save a temp file to analyze
+                    st.session_state.uploaded_file_path = "aws_temp_data.csv"
+                    df.to_csv("aws_temp_data.csv", index=False)
+                    st.success("Connected to AWS!")
 
-        if st.button("Clear All"):
-            st.session_state.clear()
-            st.rerun()
+    # Analyze Logic
+    user_query = st.text_area("What are the key trends?")
+    if st.button("Analyze Data", type="primary") and st.session_state.uploaded_file_path:
+        with st.spinner("Analyzing..."):
+            try:
+                res = run_agent(user_query, st.session_state.uploaded_file_path)
+                st.session_state.current_query = res
+                st.session_state.query_history.append(res)
+            except Exception as e:
+                st.error(f"Analysis Error: {e}")
 
-    #user query input 
-    st.subheader("💬 Query Analysis")
-    user_query = st.text_area(
-        "What kind of data would you like to access?",
-        placeholder="e.g., What are the key trends? Show me correlations between different variables for our products.",
-        height=120
-    )
-
-    is_ready = st.session_state.uploaded_file_path is not None and user_query.strip() != ""
-    analyze_button = st.button(
-        "Analyze Data", 
-        type="primary", 
-        disabled=not is_ready
-    )
-
-#analyze data + query button logic
-    if analyze_button:
-        # Check if we should use DB because of Quota Exceeded
-        with st.spinner("Fetching data from AWS DocumentDB..."):
-            df = fetch_from_documentdb()
-            
-            if df is not None:
-                st.session_state.uploaded_file_path = "AWS_DocumentDB_Active"
-                st.success("✅ Data fetched from AWS!")
-                
-                # Plot directly since AI quota is exceeded
-                st.subheader("📊 Trends from AWS Data")
-                # Auto-detect numeric columns for plotting
-                num_cols = df.select_dtypes(include=['number']).columns.tolist()
-                if num_cols:
-                    fig = px.line(df, y=num_cols[0], title=f"Trend for {num_cols[0]}")
-                    st.plotly_chart(fig)
-                st.dataframe(df.head())
-                
-    st.divider()
-    st.header("📊 Analysis Results")
-
-    # --- Results Display Logic ---
+    # Results Tabs (Displays Graphs)
     if st.session_state.current_query:
-        data_query = st.session_state.current_query
+        res = st.session_state.current_query
+        t1, t2, t3 = st.tabs(["Report", "Visuals", "Metrics"])
+        with t1: st.markdown(res.analysis_report)
+        with t2:
+            if res.image_html_path and os.path.exists(res.image_html_path):
+                with open(res.image_html_path, 'r') as f:
+                    st.components.v1.html(f.read(), height=600)
+            elif res.image_png_path and os.path.exists(res.image_png_path):
+                st.image(res.image_png_path)
+        with t3: st.write(res.metrics)
 
-        # Tabs for different sections
-        tab1, tab2, tab3, tab4 = st.tabs(["Report", "Metrics", "Visualizations", "Conclusion"])
-
-        # analysis report tab
-        with tab1:
-            st.subheader("Analysis Report")
-            if data_query.analysis_report:
-                st.markdown(data_query.analysis_report)
-            else:
-                st.warning("No analysis report available.")
-        
-        # metrics tab
-        with tab2:
-            st.subheader("Key Metrics")
-            if data_query.metrics:
-                for i, metric in enumerate(data_query.metrics, 1):
-                    st.write(f"{i}. {metric}")
-            else: 
-                st.warning("No metrics calculated.")
-
-        # visualizations tab
-        with tab3:
-            st.subheader("Visualizations")
-            if data_query.image_html_path:
-                try:
-                    with open(data_query.image_html_path, "r", encoding='utf-8') as f:
-                        html_content = f.read()
-                        st.components.v1.html(html_content, height=500, scrolling=True)
-                except Exception as e:
-                    st.error(f"Error loading HTML file: {str(e)}")
-            elif data_query.image_png_path:
-                st.image(data_query.image_png_path)
-            else:
-                st.warning("No visualizations available.")
-        
-        # Conclusion tab
-        with tab4:
-            st.subheader("Conclusion + Recommendations")
-            if data_query.conclusion:
-                st.markdown(data_query.conclusion)
-            else:
-                st.warning("No recommendations generated.")
-
-        # --- Save results section ---
-        st.subheader("💾 Save Results")
-        col_save1, col_save2 = st.columns(2)
-
-        with col_save1:
-            if data_query.analysis_report:
-                st.download_button(
-                    label="Save report (MD)",
-                    data=data_query.analysis_report,
-                    file_name=f"analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
-                    mime="text/markdown"
-                )
-
-        with col_save2:
-            summary_text = f"Query: {user_query}\n\nReport:\n{data_query.analysis_report}\n\nConclusion:\n{data_query.conclusion}"
-            st.download_button(
-                label="Save Summary (TXT)",
-                data=summary_text,
-                file_name=f"summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                mime="text/plain"
-            )
-    else:
-        st.info("Upload a CSV file/URL and enter your query to get started.")
-
-    # --- Query History ---
-    if st.session_state.query_history and len(st.session_state.query_history) > 1:
-        st.divider()
-        st.header("🕒 Query History")
-        # Loop through history (excluding current)
-        for i, hist in enumerate(reversed(st.session_state.query_history[:-1])):
-            with st.expander(f"Previous Analysis {len(st.session_state.query_history) - 1 - i}"):
-                st.markdown(hist.analysis_report)
-                if hist.image_png_path:
-                    st.image(hist.image_png_path)
-
-# --- Execution Entry Point ---
 if __name__ == "__main__":
     main()
