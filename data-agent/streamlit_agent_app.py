@@ -74,11 +74,11 @@ def fetch_from_documentdb():
         # 2. Add 'tlsAllowInvalidHostnames' because the certificate 
         # won't match the Proxy/NLB hostname
         client = MongoClient(
-            uri, 
+            st.secrets["MONGODB_URI"],
             tls=True, 
             tlsCAFile='global-bundle.pem',
-            tlsAllowInvalidHostnames=True,  # CRITICAL for external access
-            directConnection=True           # Required if connecting to a single node/proxy
+            tlsAllowInvalidHostnames=True, 
+            directConnection=True           
         )
         db = client.your_database_name
         collection = db.your_collection_name
